@@ -46,7 +46,7 @@ jobs:
 
             - name: Build Android Release
               run: |
-                  cd example/android && npm run android && ./gradlew clean && ./gradlew assembleRelease --no-daemon
+                  npm run android && cd example/android && ./gradlew clean && ./gradlew assembleRelease --no-daemon
 
             - name: Create Release
               uses: actions/upload-artifact@v2
