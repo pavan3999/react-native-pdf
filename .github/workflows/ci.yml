@@ -12,7 +12,6 @@ jobs:
             - name: Install npm dependencies
               run: |
                   npm install
-                  npm run android
                   cd example
                   npm install
 
@@ -25,7 +24,6 @@ jobs:
             - name: Install Dependencies
               run: |
                   npm install
-                  npm run android
                   cd example
                   npm install
 
