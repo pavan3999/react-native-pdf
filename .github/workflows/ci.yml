@@ -12,9 +12,9 @@ jobs:
             - name: Install npm dependencies
               run: |
                   npm install
+                  npm run android
                   cd example
                   npm install
-                  npm run
 
     build-android:
         name: Build app
@@ -25,9 +25,9 @@ jobs:
             - name: Install Dependencies
               run: |
                   npm install
+                  npm run android
                   cd example
                   npm install
-                  npm run
 
             - name: Cache Gradle Wrapper
               uses: actions/cache@v2
