@@ -169,6 +169,26 @@ react-native run-ios
 <details>
   <summary>ChangeLog details</summary>
 
+v6.6.2
+1. Fixed: Migrate to ViewPropTypes exported from 'deprecated-react-native-prop-types'
+2. Added: Decode File Path for iOS
+3. Improved: prefer current page for calculating scale factor on fit
+
+v6.6.1 depresed
+
+v6.6.0 depresed
+1. Fixed: Migrate to ViewPropTypes exported from 'deprecated-react-native-prop-types'
+2. Added: Decode File Path for iOS
+3. Improved: prefer current page for calculating scale factor on fit
+4. Improved: Typescript version source
+
+v6.5.0
+1. Fix: replace mavenCentral with maven
+2. Breaking Change(Android): replace deprecated repository: jcenter()
+3. Fix: loading progress
+4. Add: Typed "source" prop
+5. Remove: dependency to fbjs
+
 v6.4.0
 1. Remove sample for reducing NPM package size
 2. Add support for setting a filename for the cached pdf file
@@ -294,6 +314,8 @@ const styles = StyleSheet.create({
 | minScale         | number        | 1.0              | min scale| ✔   | ✔ | ✔ | 5.0.5 |
 | maxScale         | number        | 3.0              | max scale| ✔   | ✔ | ✔ | 5.0.5 |
 | horizontal    | bool          | false            | draw page direction, if you want to listen the orientation change, you can use  [[react-native-orientation-locker]](https://github.com/wonday/react-native-orientation-locker)| ✔   | ✔ | ✔ | <3.0 |
+| showsHorizontalScrollIndicator    | bool          | true            | shows or hides the horizontal scroll bar indicator on iOS| ✔   |  |  | 6.6 |
+| showsVerticalScrollIndicator    | bool          | true            | shows or hides the vertical scroll bar indicator on iOS| ✔   |  |  | 6.6 |
 | fitWidth      | bool          | false            | if true fit the width of view, can not use fitWidth=true together with scale| ✔   | ✔ | ✔ | <3.0, abandoned from 3.0 |
 | fitPolicy     | number        | 2                | 0:fit width, 1:fit height, 2:fit both(default)| ✔   | ✔ | ✔ | 3.0 |
 | spacing       | number        | 10               | the breaker size between pages| ✔   | ✔ | ✔ | <3.0 |
