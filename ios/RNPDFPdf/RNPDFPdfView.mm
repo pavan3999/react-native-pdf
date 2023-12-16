@@ -74,6 +74,7 @@ const float MIN_SCALE = 1.0f;
     UITapGestureRecognizer *_singleTapRecognizer;
     UIPinchGestureRecognizer *_pinchRecognizer;
     UILongPressGestureRecognizer *_longPressRecognizer;
+    UITapGestureRecognizer *_doubleTapEmptyRecognizer;
 }
 
 #ifdef RCT_NEW_ARCH_ENABLED
@@ -187,6 +188,7 @@ using namespace facebook::react;
     [self removeGestureRecognizer:_singleTapRecognizer];
     [self removeGestureRecognizer:_pinchRecognizer];
     [self removeGestureRecognizer:_longPressRecognizer];
+    [self removeGestureRecognizer:_doubleTapEmptyRecognizer];
 
     [self initCommonProps];
 }
@@ -556,6 +558,7 @@ using namespace facebook::react;
     _singleTapRecognizer = nil;
     _pinchRecognizer = nil;
     _longPressRecognizer = nil;
+    _doubleTapEmptyRecognizer = nil;
 }
 
 #pragma mark notification process
@@ -688,6 +691,13 @@ using namespace facebook::react;
 #pragma mark gesture process
 
 /**
+ *  Empty double tap handler
+ *
+ *
+ */
+- (void)handleDoubleTapEmpty:(UITapGestureRecognizer *)recognizer {}
+
+/**
  *  Tap
  *  zoom reset or zoom in
  *
@@ -710,17 +720,36 @@ using namespace facebook::react;
 
     CGFloat newScale = scale * self->_fixScaleFactor;
     CGPoint tapPoint = [recognizer locationInView:self->_pdfView];
-    tapPoint = [self->_pdfView convertPoint:tapPoint toPage:self->_pdfView.currentPage];
-    CGRect zoomRect = CGRectZero;
-    zoomRect.size.width = self->_pdfView.frame.size.width * newScale;
-    zoomRect.size.height = self->_pdfView.frame.size.height * newScale;
-    zoomRect.origin.x = tapPoint.x - zoomRect.size.width / 2;
-    zoomRect.origin.y = tapPoint.y - zoomRect.size.height / 2;
+
+    PDFPage *tappedPdfPage = [_pdfView pageForPoint:tapPoint nearest:NO];
+    PDFPage *pageRef;
+    if (tappedPdfPage) {
+        pageRef = tappedPdfPage;
+    }   else {
+        pageRef = self->_pdfView.currentPage;
+    }
+    tapPoint = [self->_pdfView convertPoint:tapPoint toPage:pageRef];
+
+    CGRect tempZoomRect = CGRectZero;
+    tempZoomRect.size.width = self->_pdfView.frame.size.width;
+    tempZoomRect.size.height = 1;
+    tempZoomRect.origin = tapPoint;
 
     dispatch_async(dispatch_get_main_queue(), ^{
         [UIView animateWithDuration:0.3 animations:^{
             [self->_pdfView setScaleFactor:newScale];
-            [self->_pdfView goToRect:zoomRect onPage:self->_pdfView.currentPage];
+
+            [self->_pdfView goToRect:tempZoomRect onPage:pageRef];
+            CGPoint defZoomOrigin = [self->_pdfView convertPoint:tempZoomRect.origin fromPage:pageRef];
+            defZoomOrigin.x = defZoomOrigin.x - self->_pdfView.frame.size.width / 2;
+            defZoomOrigin.y = defZoomOrigin.y - self->_pdfView.frame.size.height / 2;
+            defZoomOrigin = [self->_pdfView convertPoint:defZoomOrigin toPage:pageRef];
+            CGRect defZoomRect =  CGRectOffset(
+                tempZoomRect,
+                defZoomOrigin.x - tempZoomRect.origin.x,
+                defZoomOrigin.y - tempZoomRect.origin.y
+            );
+            [self->_pdfView goToRect:defZoomRect onPage:pageRef];
 
             [self setNeedsDisplay];
             [self onScaleChanged:Nil];
@@ -817,6 +846,12 @@ using namespace facebook::react;
     [self addGestureRecognizer:longPressRecognizer];
     _longPressRecognizer = longPressRecognizer;
 
+    // Override the _pdfView double tap gesture recognizer so that it doesn't confilict with custom double tap
+    UITapGestureRecognizer *doubleTapEmptyRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self
+                                                                                          action:@selector(handleDoubleTapEmpty:)];
+    doubleTapEmptyRecognizer.numberOfTapsRequired = 2;
+    [_pdfView addGestureRecognizer:doubleTapEmptyRecognizer];
+    _doubleTapEmptyRecognizer = doubleTapEmptyRecognizer;
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer
