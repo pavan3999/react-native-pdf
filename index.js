@@ -51,6 +51,7 @@ export default class Pdf extends Component {
         enableAnnotationRendering: PropTypes.bool,
         showsHorizontalScrollIndicator: PropTypes.bool,
         showsVerticalScrollIndicator: PropTypes.bool,
+        scrollEnabled: PropTypes.bool,
         enablePaging: PropTypes.bool,
         enableRTL: PropTypes.bool,
         fitPolicy: PropTypes.number,
@@ -86,6 +87,7 @@ export default class Pdf extends Component {
         enableAnnotationRendering: true,
         showsHorizontalScrollIndicator: true,
         showsVerticalScrollIndicator: true,
+        scrollEnabled: true,
         enablePaging: false,
         enableRTL: false,
         trustAllCerts: true,
@@ -127,7 +129,7 @@ export default class Pdf extends Component {
 
         if ((nextSource.uri !== curSource.uri)) {
             // if has download task, then cancel it.
-            if (this.lastRNBFTask) {
+            if (this.lastRNBFTask && this.lastRNBFTask.cancel) {
                 this.lastRNBFTask.cancel(err => {
                     this._loadFromSource(this.props.source);
                 });
@@ -146,8 +148,8 @@ export default class Pdf extends Component {
     componentWillUnmount() {
         this._mounted = false;
         if (this.lastRNBFTask) {
-            this.lastRNBFTask.cancel(err => {
-            });
+            // this.lastRNBFTask.cancel(err => {
+            // });
             this.lastRNBFTask = null;
         }
 
@@ -233,7 +235,7 @@ export default class Pdf extends Component {
                 } else {
                     if (this._mounted) {
                        this.setState({
-                            path: unescape(uri.replace(/file:\/\//i, '')),
+                            path: decodeURIComponent(uri.replace(/file:\/\//i, '')),
                             isDownloaded: true,
                         });
                     }
@@ -276,6 +278,9 @@ export default class Pdf extends Component {
                 if (this._mounted) {
                     this.setState({progress: received / total});
                 }
+            })
+            .catch(async (error) => {
+                this._onError(error);
             });
 
         this.lastRNBFTask
@@ -406,7 +411,7 @@ export default class Pdf extends Component {
                     <View style={[this.props.style,{overflow: 'hidden'}]}>
                         {!this.state.isDownloaded?
                             (<View
-                                style={styles.progressContainer}
+                                style={[styles.progressContainer, this.props.progressContainerStyle]}
                             >
                                 {this.props.renderActivityIndicator
                                     ? this.props.renderActivityIndicator(this.state.progress)

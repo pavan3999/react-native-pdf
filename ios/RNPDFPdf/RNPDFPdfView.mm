@@ -86,6 +86,12 @@ using namespace facebook::react;
   return concreteComponentDescriptorProvider<RNPDFPdfViewComponentDescriptor>();
 }
 
+// Needed because of this: https://github.com/facebook/react-native/pull/37274
++ (void)load
+{
+  [super load];
+}
+
 - (instancetype)initWithFrame:(CGRect)frame
 {
     if (self = [super initWithFrame:frame]) {
@@ -136,6 +142,10 @@ using namespace facebook::react;
         _enableAnnotationRendering = newProps.enableAnnotationRendering;
         [updatedPropNames addObject:@"enableAnnotationRendering"];
     }
+    if (_enableDoubleTapZoom != newProps.enableDoubleTapZoom) {
+        _enableDoubleTapZoom = newProps.enableDoubleTapZoom;
+        [updatedPropNames addObject:@"enableDoubleTapZoom"];
+    }
     if (_fitPolicy != newProps.fitPolicy) {
         _fitPolicy = newProps.fitPolicy;
         [updatedPropNames addObject:@"fitPolicy"];
@@ -159,6 +169,11 @@ using namespace facebook::react;
     if (_showsVerticalScrollIndicator != newProps.showsVerticalScrollIndicator) {
         _showsVerticalScrollIndicator = newProps.showsVerticalScrollIndicator;
         [updatedPropNames addObject:@"showsVerticalScrollIndicator"];
+    }
+
+    if (_scrollEnabled != newProps.scrollEnabled) {
+        _scrollEnabled = newProps.scrollEnabled;
+        [updatedPropNames addObject:@"scrollEnabled"];
     }
 
     [super updateProps:props oldProps:oldProps];
@@ -242,11 +257,13 @@ using namespace facebook::react;
     _enablePaging = NO;
     _enableRTL = NO;
     _enableAnnotationRendering = YES;
+    _enableDoubleTapZoom = YES;
     _fitPolicy = 2;
     _spacing = 10;
     _singlePage = NO;
     _showsHorizontalScrollIndicator = YES;
     _showsVerticalScrollIndicator = YES;
+    _scrollEnabled = YES;
 
     // init and config PDFView
     _pdfView = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, 500, 500)];
@@ -272,6 +289,12 @@ using namespace facebook::react;
     [[_pdfView document] setDelegate: self];
     [_pdfView setDelegate: self];
 
+    // Disable built-in double tap, so as not to conflict with custom recognizers.
+    for (UIGestureRecognizer *recognizer in _pdfView.gestureRecognizers) {
+        if ([recognizer isKindOfClass:[UITapGestureRecognizer class]]) {
+            recognizer.enabled = NO;
+        }
+    }
 
     [self bindTap];
 }
@@ -456,37 +479,23 @@ using namespace facebook::react;
             }
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"showsHorizontalScrollIndicator"])) {
-            if (_showsHorizontalScrollIndicator) {
-                for (UIView *subview in _pdfView.subviews) {
-                    if ([subview isKindOfClass:[UIScrollView class]]) {
-                        UIScrollView *scrollView = (UIScrollView *)subview;
-                        scrollView.showsHorizontalScrollIndicator = YES;
-                    }
-                }
-            } else {
-                for (UIView *subview in _pdfView.subviews) {
-                    if ([subview isKindOfClass:[UIScrollView class]]) {
-                        UIScrollView *scrollView = (UIScrollView *)subview;
-                        scrollView.showsHorizontalScrollIndicator = NO;
-                    }
-                }
-            }
+        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"showsHorizontalScrollIndicator"] || [changedProps containsObject:@"showsVerticalScrollIndicator"])) {
+            [self setScrollIndicators:self horizontal:_showsHorizontalScrollIndicator vertical:_showsVerticalScrollIndicator depth:0];
         }
 
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"showsVerticalScrollIndicator"])) {
-            if (_showsVerticalScrollIndicator) {
+        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"scrollEnabled"])) {
+            if (_scrollEnabled) {
                 for (UIView *subview in _pdfView.subviews) {
                     if ([subview isKindOfClass:[UIScrollView class]]) {
                         UIScrollView *scrollView = (UIScrollView *)subview;
-                        scrollView.showsVerticalScrollIndicator = YES;
+                        scrollView.scrollEnabled = YES;
                     }
                 }
             } else {
                 for (UIView *subview in _pdfView.subviews) {
                     if ([subview isKindOfClass:[UIScrollView class]]) {
                         UIScrollView *scrollView = (UIScrollView *)subview;
-                        scrollView.showsVerticalScrollIndicator = NO;
+                        scrollView.scrollEnabled = NO;
                     }
                 }
             }
@@ -495,7 +504,16 @@ using namespace facebook::react;
         if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enablePaging"] || [changedProps containsObject:@"horizontal"] || [changedProps containsObject:@"page"])) {
 
             PDFPage *pdfPage = [_pdfDocument pageAtIndex:_page-1];
-            if (pdfPage) {
+            if (pdfPage && _page == 1) {
+                // goToDestination() would be better. However, there is an
+                // error in the pointLeftTop computation that often results in
+                // scrolling to the middle of the page.
+                // Special case workaround to make starting at the first page
+                // align acceptably.
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self->_pdfView goToRect:CGRectMake(0, NSUIntegerMax, 1, 1) onPage:pdfPage];
+                });
+            } else if (pdfPage) {
                 CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
 
                 // some pdf with rotation, then adjust it
@@ -705,6 +723,19 @@ using namespace facebook::react;
  */
 - (void)handleDoubleTap:(UITapGestureRecognizer *)recognizer
 {
+
+    // Prevent double tap from selecting text.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self->_pdfView clearSelection];
+    });
+
+    // Event appears to be consumed; broadcast for JS.
+    // _onChange(@{ @"message": @"pageDoubleTap" });
+
+    if (!_enableDoubleTapZoom) {
+        return;
+    }
+
     // Cycle through min/mid/max scale factors to be consistent with Android
     float min = self->_pdfView.minScaleFactor/self->_fixScaleFactor;
     float max = self->_pdfView.maxScaleFactor/self->_fixScaleFactor;
@@ -863,6 +894,23 @@ using namespace facebook::react;
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
 {
     return !_singlePage;
+}
+
+- (void)setScrollIndicators:(UIView *)view horizontal:(BOOL)horizontal vertical:(BOOL)vertical depth:(int)depth {
+    // max depth, prevent infinite loop
+    if (depth > 10) {
+        return;
+    }
+    
+    if ([view isKindOfClass:[UIScrollView class]]) {
+        UIScrollView *scrollView = (UIScrollView *)view;
+        scrollView.showsHorizontalScrollIndicator = horizontal;
+        scrollView.showsVerticalScrollIndicator = vertical;
+    }
+    
+    for (UIView *subview in view.subviews) {
+        [self setScrollIndicators:subview horizontal:horizontal vertical:vertical depth:depth + 1];
+    }
 }
 
 @end
